@@ -43,11 +43,19 @@ jobs:
           # Determine version (fallback to 1.0.0 if triggered by push to main instead of manual dispatch)
           VERSION="${{ github.event.inputs.version || '1.0.0' }}"
           
+          echo "Starting publish at $(date)"
+          
           # Publish the version automatically on ClawHub.ai using the CLI
-          npx clawhub publish . \
+          # We wrap it in 'time' to measure execution duration and enable DEBUG logging
+          DEBUG=clawhub*,* time npx clawhub publish . \
             --version "$VERSION" \
             --slug "proxybase-openclaw-skill" \
             --name "ProxyBase" \
             --tags "latest" \
             --registry "https://clawhub.ai/" \
-            --changelog "Auto-published from GitHub Actions $GITHUB_SHA"
+            --changelog "Auto-published from GitHub Actions $GITHUB_SHA" || {
+              echo "Publish failed at $(date)"
+              exit 1
+            }
+            
+          echo "Finished publish at $(date)"
