@@ -1,0 +1,49 @@
+name: Publish SOCKS5 Skill to ClawHub
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version bump type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  publish:
+    name: Publish Skill
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Publish to ClawHub
+        env:
+          CLAWHUB_TOKEN: ${{ secrets.CLAWHUB_TOKEN }}
+        run: |
+          if [ -z "$CLAWHUB_TOKEN" ]; then
+            echo "Error: CLAWHUB_TOKEN secret is not set."
+            exit 1
+          fi
+          
+          # Install the ClawHub CLI globally
+          npm install -g clawhub-cli || echo "Falling back to npx"
+          
+          # Determine the bump type (patch by default on push to main, unless overridden by manual trigger)
+          BUMP_TYPE="${{ github.event.inputs.version_bump || 'patch' }}"
+          
+          # Sync and bump the version automatically on ClawHub.ai using the CLI
+          npx clawhub sync --bump "$BUMP_TYPE" --changelog "Auto-published from GitHub Actions $GITHUB_SHA" --yes
