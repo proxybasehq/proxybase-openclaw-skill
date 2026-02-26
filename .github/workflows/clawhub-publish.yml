@@ -6,15 +6,10 @@ on:
       - main
   workflow_dispatch:
     inputs:
-      version_bump:
-        description: 'Version bump type'
+      version:
+        description: 'Version to publish (e.g., 1.0.0)'
         required: true
-        default: 'patch'
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
+        default: '1.0.0'
 
 jobs:
   publish:
@@ -40,10 +35,16 @@ jobs:
           fi
           
           # Install the ClawHub CLI globally
-          npm install -g clawhub-cli || echo "Falling back to npx"
+          npm install -g clawhub || echo "Falling back to npx"
           
-          # Determine the bump type (patch by default on push to main, unless overridden by manual trigger)
-          BUMP_TYPE="${{ github.event.inputs.version_bump || 'patch' }}"
+          # Determine version (fallback to 1.0.0 if triggered by push to main instead of manual dispatch)
+          VERSION="${{ github.event.inputs.version || '1.0.0' }}"
           
-          # Sync and bump the version automatically on ClawHub.ai using the CLI
-          npx clawhub sync --bump "$BUMP_TYPE" --changelog "Auto-published from GitHub Actions $GITHUB_SHA" --yes
+          # Publish the version automatically on ClawHub.ai using the CLI
+          npx clawhub publish . \
+            --version "$VERSION" \
+            --slug "proxybase-openclaw-skill" \
+            --name "ProxyBase" \
+            --tags "latest" \
+            --registry "https://clawhub.ai/" \
+            --changelog "Auto-published from GitHub Actions $GITHUB_SHA"
