@@ -37,6 +37,9 @@ jobs:
           # Install the ClawHub CLI globally
           npm install -g clawhub || echo "Falling back to npx"
           
+          # Authenticate with the ClawHub registry
+          npx clawhub login --token "$CLAWHUB_TOKEN"
+          
           # Determine version (fallback to 1.0.0 if triggered by push to main instead of manual dispatch)
           VERSION="${{ github.event.inputs.version || '1.0.0' }}"
           
