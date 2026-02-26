@@ -1,6 +1,6 @@
 .git/**
-test.sh
 .github/**
-state/**
-scripts/**
 lib/**
+scripts/**
+state/**
+test.sh
