@@ -8,7 +8,7 @@ args:
 steps:
   - id: setup
     command: >
-      bash {baseDir}/scripts/proxybase-register.sh 2>&1 || true;
+      bash {baseDir}/proxybase.sh register 2>&1 || true;
       echo '{"status":"ready"}'
 
   - id: list_packages
@@ -19,7 +19,7 @@ steps:
 
   - id: create_order
     command: >
-      bash {baseDir}/scripts/proxybase-order.sh "$package_id" "$pay_currency"
+      bash {baseDir}/proxybase.sh order "$package_id" "$pay_currency"
 
   - id: confirm_payment
     command: >
@@ -30,7 +30,7 @@ steps:
     command: >
       ORDER_ID=$(echo "$PROXYBASE_CREATE_OUTPUT" | grep '^PROXYBASE_ORDER_ID=' | tail -1 | cut -d= -f2);
       if [ -z "$ORDER_ID" ]; then echo "ERROR: Could not extract order_id from create_order step"; exit 1; fi;
-      bash {baseDir}/scripts/proxybase-poll.sh "$ORDER_ID"
+      bash {baseDir}/proxybase.sh poll "$ORDER_ID"
     env:
       PROXYBASE_CREATE_OUTPUT: $create_order.stdout
     condition: $confirm_payment.approved
@@ -43,7 +43,7 @@ steps:
   - id: inject_gateway
     command: >
       ORDER_ID=$(echo "$PROXYBASE_CREATE_OUTPUT" | grep '^PROXYBASE_ORDER_ID=' | tail -1 | cut -d= -f2);
-      bash {baseDir}/scripts/proxybase-inject-gateway.sh "$ORDER_ID"
+      bash {baseDir}/proxybase.sh inject-gateway "$ORDER_ID"
     env:
       PROXYBASE_CREATE_OUTPUT: $create_order.stdout
     condition: $ask_inject_gateway.approved

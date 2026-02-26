@@ -77,34 +77,37 @@ When you run this pipeline:
 
 ```bash
 # Register agent (first time)
-source scripts/proxybase-register.sh
+bash proxybase.sh register
 
 # List packages
 curl -s "$PROXYBASE_API_URL/packages" -H "X-API-Key: $PROXYBASE_API_KEY"
 
 # Create order
-bash scripts/proxybase-order.sh us_residential_1gb usdcsol
+bash proxybase.sh order us_residential_1gb usdcsol
 
 # Poll until active
-bash scripts/proxybase-poll.sh <order_id>
+bash proxybase.sh poll <order_id>
 
 # Poll with extended timeout (BTC/slow chains)
-bash scripts/proxybase-poll.sh <order_id> --max-attempts 200
+bash proxybase.sh poll <order_id> --max-attempts 200
 
 # Check all orders
-bash scripts/proxybase-status.sh
+bash proxybase.sh status
 
 # Check specific order
-bash scripts/proxybase-status.sh <order_id>
+bash proxybase.sh status <order_id>
 
 # Remove expired/failed orders
-bash scripts/proxybase-status.sh --cleanup
+bash proxybase.sh status --cleanup
 
 # Top up bandwidth on active proxy
-bash scripts/proxybase-topup.sh <order_id> us_residential_1gb
+bash proxybase.sh topup <order_id> us_residential_1gb
 
 # Rotate proxy IP
-bash scripts/proxybase-rotate.sh <order_id>
+bash proxybase.sh rotate <order_id>
+
+# Inject proxy into OpenClaw gateway
+bash proxybase.sh inject-gateway <order_id>
 ```
 
 ## File Structure
@@ -113,16 +116,7 @@ bash scripts/proxybase-rotate.sh <order_id>
 proxybase-openclaw-skill/
 ├── SKILL.md                          # Skill definition (AgentSkills format)
 ├── README.md                         # This file
-├── lib/
-│   └── common.sh                     # Shared functions (locking, JSON validation, API calls)
-├── scripts/
-│   ├── proxybase-register.sh         # One-time agent registration
-│   ├── proxybase-order.sh            # Create a proxy order
-│   ├── proxybase-poll.sh             # Poll order until terminal state
-│   ├── proxybase-status.sh           # Check tracked order statuses + cleanup
-│   ├── proxybase-topup.sh            # Top up bandwidth on active order
-│   ├── proxybase-rotate.sh           # Rotate proxy credentials (new IP)
-│   └── proxybase-inject-gateway.sh   # Inject proxy into OpenClaw systemd service
+├── proxybase.sh                      # Unified CLI (all commands in one file)
 ├── pipelines/
 │   └── proxybase-purchase.lobster    # End-to-end purchase workflow
 ├── config/
@@ -130,7 +124,8 @@ proxybase-openclaw-skill/
 └── state/                            # Created at runtime
     ├── credentials.env               # Agent ID + API key (chmod 600)
     ├── orders.json                   # Tracked orders
-    └── .proxy-env                    # Active proxy ENV vars
+    ├── .proxy-env                    # Active proxy ENV vars (most recent)
+    └── .proxy-env-<order_id>         # Per-order proxy ENV vars
 ```
 
 ## Packages

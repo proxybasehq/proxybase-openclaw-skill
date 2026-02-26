@@ -31,7 +31,7 @@ or `openclaw.json` edits are required.
 For manual or debugging use, you can also register explicitly:
 
 ```bash
-source {baseDir}/scripts/proxybase-register.sh
+bash {baseDir}/proxybase.sh register
 ```
 
 ## State Files
@@ -143,7 +143,7 @@ The next connection gets a fresh IP. Existing connections are unaffected.
 ### Interactive (Chat with Human)
 
 1. **Load credentials**: `source {baseDir}/state/credentials.env 2>/dev/null`
-2. **Register if needed**: Run `source {baseDir}/scripts/proxybase-register.sh` if no key
+2. **Register if needed**: Run `bash {baseDir}/proxybase.sh register` if no key
 3. **List packages**: Show user available packages with prices
 4. **List currencies**: Show user payment options (default: usdcsol)
 5. **Create order**: `POST /orders` with chosen package + currency
@@ -158,37 +158,37 @@ For a streamlined flow, use the provided scripts:
 
 **Create order and track it:**
 ```bash
-bash {baseDir}/scripts/proxybase-order.sh us_residential_1gb usdcsol
+bash {baseDir}/proxybase.sh order us_residential_1gb usdcsol
 ```
 
 **Poll an order until terminal state:**
 ```bash
-bash {baseDir}/scripts/proxybase-poll.sh ORDER_ID
+bash {baseDir}/proxybase.sh poll ORDER_ID
 ```
 
 **Check all tracked orders:**
 ```bash
-bash {baseDir}/scripts/proxybase-status.sh
+bash {baseDir}/proxybase.sh status
 ```
 
 **Clean up expired/failed orders:**
 ```bash
-bash {baseDir}/scripts/proxybase-status.sh --cleanup
+bash {baseDir}/proxybase.sh status --cleanup
 ```
 
 **Top up bandwidth on an active order:**
 ```bash
-bash {baseDir}/scripts/proxybase-topup.sh ORDER_ID us_residential_1gb
+bash {baseDir}/proxybase.sh topup ORDER_ID us_residential_1gb
 ```
 
 **Rotate proxy credentials (new IP):**
 ```bash
-bash {baseDir}/scripts/proxybase-rotate.sh ORDER_ID
+bash {baseDir}/proxybase.sh rotate ORDER_ID
 ```
 
 **Poll with extended timeout (for slow BTC confirmations):**
 ```bash
-bash {baseDir}/scripts/proxybase-poll.sh ORDER_ID --max-attempts 200
+bash {baseDir}/proxybase.sh poll ORDER_ID --max-attempts 200
 ```
 
 ## Payment Pause — Polling Strategies
@@ -206,7 +206,7 @@ Set up a cron job to poll every 30 seconds:
   "sessionTarget": "isolated",
   "payload": {
     "kind": "agentTurn",
-    "message": "Run: bash {baseDir}/scripts/proxybase-poll.sh ORDER_ID\nIf proxy_active, announce the SOCKS5 credentials to the user and delete this cron job. If expired or failed, announce the failure and delete this cron job. If still pending or confirming, reply with NO_REPLY."
+    "message": "Run: bash {baseDir}/proxybase.sh poll ORDER_ID\nIf proxy_active, announce the SOCKS5 credentials to the user and delete this cron job. If expired or failed, announce the failure and delete this cron job. If still pending or confirming, reply with NO_REPLY."
   },
   "delivery": { "mode": "announce", "channel": "last" },
   "deleteAfterRun": false
@@ -218,7 +218,7 @@ Set up a cron job to poll every 30 seconds:
 Tell the user: "Let me know when you've sent the payment and I'll check the status."
 When they say they paid:
 ```bash
-bash {baseDir}/scripts/proxybase-poll.sh ORDER_ID
+bash {baseDir}/proxybase.sh poll ORDER_ID
 ```
 
 ### Strategy C: Webhook (If Gateway is Internet-Reachable)
@@ -279,7 +279,7 @@ curl -s --proxy socks5://USERNAME:PASSWORD@api.proxybase.xyz:1080 https://httpbi
 
 | Error | Meaning | Action |
 |---|---|---|
-| `401 Unauthorized` | API key invalid or missing | Re-register: `source {baseDir}/scripts/proxybase-register.sh` |
+| `401 Unauthorized` | API key invalid or missing | Re-register: `bash {baseDir}/proxybase.sh register` |
 | `404 Not Found` | Order ID invalid | Check order ID, remove from tracking |
 | `429 Too Many Requests` | Rate limited | Wait 5-10s and retry, max 3 attempts |
 | `500/502/503` | Server error | Retry up to 3 times with 5s delay |
