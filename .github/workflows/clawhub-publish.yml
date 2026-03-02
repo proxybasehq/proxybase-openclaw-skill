@@ -40,8 +40,14 @@ jobs:
           # Authenticate with the ClawHub registry
           npx clawhub login --token "$CLAWHUB_TOKEN"
           
-          # Determine version (fallback to 1.0.0 if triggered by push to main instead of manual dispatch)
-          VERSION="${{ github.event.inputs.version || '1.0.0' }}"
+          # Determine version
+          # If triggered by workflow_dispatch, use provided version
+          # If triggered by push to main, auto-generate version based on run number
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="1.0.${{ github.run_number }}"
+          fi
           
           echo "Starting publish at $(date)"
           
