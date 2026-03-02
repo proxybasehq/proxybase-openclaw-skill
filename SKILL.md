@@ -18,7 +18,7 @@ with cryptocurrency payments. Proxies never expire by time — only by bandwidth
 | API Base | `$PROXYBASE_API_URL` (default: `https://api.proxybase.xyz/v1`) |
 | SOCKS5 Host | `api.proxybase.xyz:1080` |
 | Auth Header | `X-API-Key: <key>` (key starts with `pk_`) |
-| Payments | Crypto via NOWPayments (USDT TRC20, BTC, ETH, SOL, etc.) |
+| Payments | Crypto (USDT, USDCSOL, BTC, ETH, SOL, etc.) |
 | Pricing | ~$10/GB US residential |
 
 ## Setup
@@ -72,7 +72,7 @@ curl -s "$PROXYBASE_API_URL/currencies" -H "X-API-Key: $PROXYBASE_API_KEY" | jq 
 ```
 
 Returns `{ "currencies": ["usdcsol", "btc", "eth", "sol", ...] }`.
-Default: `usdcsol` (USDT on Tron — fast, low fees).
+Default: `usdcsol`.
 
 ### Create Order
 
@@ -296,5 +296,5 @@ curl -s --proxy socks5://USERNAME:PASSWORD@api.proxybase.xyz:1080 https://httpbi
 - Top-ups are additive (extend existing bandwidth, same credentials)
 - Webhook notifications at 80% and 95% bandwidth usage if `callback_url` provided
 - Payment expires after ~24h (NOWPayments window)
-- USDT TRC20 is recommended: fast confirmations, low fees
+- USDC on SOL is recommended: fast confirmations, low fees
 - **Never expose `api_key` or proxy passwords in chat messages** — use env vars

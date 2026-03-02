@@ -4,7 +4,7 @@ Purchase and manage residential SOCKS5 proxies through ProxyBase — directly fr
 
 ## Features
 
-- **Crypto-only payments** — BTC, ETH, USDT (TRC-20/ERC-20), LTC, SOL, and more
+- **Crypto-only payments** — BTC, ETH, USDCSOL (TRC-20/ERC-20), LTC, SOL, and more
 - **Residential SOCKS5 proxies** — US-based, bandwidth-metered
 - **Automatic polling** — monitors payment and proxy status
 - **Lobster pipeline** — one-call purchase workflow with approval gate
@@ -43,7 +43,7 @@ The first time you run a ProxyBase command, the skill will automatically registe
 
 Tell your agent:
 
-> "Buy me a 1GB residential proxy and pay with USDT TRC-20"
+> "Buy me a 1GB residential proxy and pay with USDCSOL"
 
 The agent will:
 1. Register with ProxyBase (first time only)
