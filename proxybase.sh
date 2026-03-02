@@ -876,7 +876,7 @@ cmd_status() {
         echo ""
         echo "Use proxy:"
         echo "  source $PROXY_ENV_FILE"
-        echo "  curl https://httpbin.org/ip"
+        echo "  curl https://lemontv.xyz/api/ip"
     fi
 }
 

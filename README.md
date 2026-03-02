@@ -156,13 +156,13 @@ If you chose not to inject globally, you can dynamically source the proxy enviro
 
 ```bash
 source state/.proxy-env-<order_id>
-curl https://httpbin.org/ip  # routed through proxy
+curl https://lemontv.xyz/api/ip  # routed through proxy
 ```
 
 ### 3. Per-command
 
 ```bash
-curl --proxy socks5://USER:PASS@api.proxybase.xyz:1080 https://httpbin.org/ip
+curl --proxy socks5://USER:PASS@api.proxybase.xyz:1080 https://lemontv.xyz/api/ip
 ```
 
 ### 4. Python
@@ -171,7 +171,7 @@ curl --proxy socks5://USER:PASS@api.proxybase.xyz:1080 https://httpbin.org/ip
 import requests
 proxies = {"http": "socks5://USER:PASS@api.proxybase.xyz:1080",
            "https": "socks5://USER:PASS@api.proxybase.xyz:1080"}
-r = requests.get("https://httpbin.org/ip", proxies=proxies)
+r = requests.get("https://lemontv.xyz/api/ip", proxies=proxies)
 ```
 
 ## Order Status Flow

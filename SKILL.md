@@ -240,7 +240,7 @@ ProxyBase sends status updates to the webhook. Always combine with cron polling 
 ```bash
 source {baseDir}/state/.proxy-env
 # Now all curl/wget commands go through the proxy automatically
-curl https://httpbin.org/ip
+curl https://lemontv.xyz/api/ip
 ```
 
 Or manually:
@@ -253,7 +253,7 @@ export NO_PROXY="localhost,127.0.0.1,api.proxybase.xyz"
 ### Option 2: Per-Command Proxy
 
 ```bash
-curl --proxy socks5://USERNAME:PASSWORD@api.proxybase.xyz:1080 https://httpbin.org/ip
+curl --proxy socks5://USERNAME:PASSWORD@api.proxybase.xyz:1080 https://lemontv.xyz/api/ip
 ```
 
 ### Option 3: Python with Proxy
@@ -261,7 +261,7 @@ curl --proxy socks5://USERNAME:PASSWORD@api.proxybase.xyz:1080 https://httpbin.o
 ```python
 import requests
 proxies = {"https": "socks5://USERNAME:PASSWORD@api.proxybase.xyz:1080"}
-r = requests.get("https://httpbin.org/ip", proxies=proxies)
+r = requests.get("https://lemontv.xyz/api/ip", proxies=proxies)
 print(r.text)
 ```
 
@@ -269,10 +269,10 @@ print(r.text)
 
 ```bash
 # Direct IP
-curl -s https://httpbin.org/ip | jq .origin
+curl -s https://lemontv.xyz/api/ip | jq .ip
 
 # Proxied IP (should be different)
-curl -s --proxy socks5://USERNAME:PASSWORD@api.proxybase.xyz:1080 https://httpbin.org/ip | jq .origin
+curl -s --proxy socks5://USERNAME:PASSWORD@api.proxybase.xyz:1080 https://lemontv.xyz/api/ip | jq .ip
 ```
 
 ## Error Handling
