@@ -25,6 +25,10 @@ if [[ -z "$ORDER_ID" || -z "$PACKAGE_ID" ]]; then
     exit 1
 fi
 
+# Validate inputs to prevent injection
+validate_safe_string "$ORDER_ID" "order_id" || { echo "ERROR: order_id contains invalid characters"; exit 1; }
+validate_safe_string "$PACKAGE_ID" "package_id" || { echo "ERROR: package_id contains invalid characters"; exit 1; }
+
 load_credentials --required || exit 1
 init_orders_file
 

@@ -26,6 +26,11 @@ for arg in "$@"; do
     esac
 done
 
+# Validate order_id early (before file operations)
+if [[ -n "$SPECIFIC_ORDER" ]]; then
+    validate_safe_string "$SPECIFIC_ORDER" "order_id" || { echo "ERROR: order_id contains invalid characters"; exit 1; }
+fi
+
 if [[ ! -f "$ORDERS_FILE" ]]; then
     echo "No tracked orders. Create one with:"
     echo "  bash $SCRIPT_DIR/proxybase-order.sh us_residential_1gb"
@@ -145,11 +150,15 @@ if [[ -n "${PROXYBASE_API_KEY:-}" ]]; then
             USER=$(echo "$API_RESPONSE" | jq -r '.proxy.username // empty')
             PASS=$(echo "$API_RESPONSE" | jq -r '.proxy.password // empty')
             if [[ -n "$USER" && -n "$PASS" ]]; then
-                PROXY_URL="socks5://${USER}:${PASS}@${HOST}:${PORT}"
-                UPDATED=$(jq --arg oid "$OID" --arg p "$PROXY_URL" \
-                    '(.orders[] | select(.order_id == $oid)).proxy = $p' "$ORDERS_FILE")
-                if validate_json "$UPDATED"; then
-                    echo "$UPDATED" > "$ORDERS_FILE"
+                # Validate proxy credentials before storing
+                if build_safe_proxy_url "$HOST" "$PORT" "$USER" "$PASS"; then
+                    UPDATED=$(jq --arg oid "$OID" --arg p "$PROXY_URL" \
+                        '(.orders[] | select(.order_id == $oid)).proxy = $p' "$ORDERS_FILE")
+                    if validate_json "$UPDATED"; then
+                        echo "$UPDATED" > "$ORDERS_FILE"
+                    fi
+                else
+                    echo "  $OID: SECURITY WARNING — proxy credentials contain invalid characters" >&2
                 fi
             fi
         fi

@@ -206,7 +206,7 @@ Set up a cron job to poll every 30 seconds:
   "sessionTarget": "isolated",
   "payload": {
     "kind": "agentTurn",
-    "message": "Run: bash {baseDir}/proxybase.sh poll ORDER_ID\nIf proxy_active, announce the SOCKS5 credentials to the user and delete this cron job. If expired or failed, announce the failure and delete this cron job. If still pending or confirming, reply with NO_REPLY."
+    "message": "Check the status of ProxyBase order ORDER_ID by running: bash {baseDir}/proxybase.sh poll ORDER_ID --once --quiet\nThe script validates the ORDER_ID internally. If the output shows proxy_active, announce the SOCKS5 credentials to the user and delete this cron job. If expired or failed, announce the failure and delete this cron job. If still pending or confirming, reply with NO_REPLY."
   },
   "delivery": { "mode": "announce", "channel": "last" },
   "deleteAfterRun": false
@@ -298,3 +298,44 @@ curl -s --proxy socks5://USERNAME:PASSWORD@api.proxybase.xyz:1080 https://lemont
 - Payment expires after ~24h (NOWPayments window)
 - USDC on SOL is recommended: fast confirmations, low fees
 - **Never expose `api_key` or proxy passwords in chat messages** — use env vars
+
+## Security
+
+### Input Validation
+
+All inputs from API responses and command arguments are validated against strict
+character allowlists before use:
+
+- **Proxy credentials** (username, password, host, port): Only alphanumeric
+  characters and a limited set of URL-safe symbols are allowed. Shell
+  metacharacters (`$`, `` ` ``, `"`, `'`, `;`, `&`, `|`, `>`, `<`, `()`, `{}`,
+  `\`) are **rejected**, preventing command injection if the API is compromised.
+- **Order IDs, API keys, package IDs**: Only alphanumeric, hyphens, and
+  underscores.
+- **Proxy env files** (`.proxy-env`): Written with single-quoted values to
+  prevent shell expansion when sourced.
+
+### Argument Safety for AI Agent Execution
+
+When the AI agent executes ProxyBase commands, all arguments (order IDs,
+package IDs) **must** come from previously validated ProxyBase API responses
+or the local `orders.json` state file — never from raw user chat input without
+validation. The scripts enforce this by validating all arguments against strict
+patterns (e.g., `[a-zA-Z0-9_-]+` for order IDs).
+
+### inject-gateway Safety
+
+The `inject-gateway` command modifies the OpenClaw gateway's systemd service
+file. It includes multiple safety guards:
+
+1. **Proxy URL validation**: The URL must match `socks5://user:pass@host:port`
+   with only safe characters
+2. **Service file verification**: The file must contain `[Service]` and
+   reference `openclaw`/`OpenClaw` — arbitrary service files are rejected
+3. **Automatic backup**: Creates a `.bak` copy before any modification
+4. **Dry-run mode**: Use `--dry-run` to preview changes without applying them:
+   ```bash
+   bash {baseDir}/proxybase.sh inject-gateway ORDER_ID --dry-run
+   ```
+5. **Post-write validation**: Verifies the rewritten file contains the
+   expected environment lines; restores from backup on failure

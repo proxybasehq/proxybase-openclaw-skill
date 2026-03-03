@@ -30,6 +30,9 @@ if [[ -z "$PACKAGE_ID" ]]; then
     exit 1
 fi
 
+# Validate input to prevent injection
+validate_safe_string "$PACKAGE_ID" "package_id" || { echo "ERROR: package_id contains invalid characters"; exit 1; }
+
 load_credentials --required || exit 1
 init_orders_file
 
@@ -66,6 +69,9 @@ if [[ -z "$ORDER_ID" || "$ORDER_ID" == "null" ]]; then
     echo "$API_RESPONSE" | jq .
     exit 1
 fi
+
+# Validate order_id from API response
+validate_safe_string "$ORDER_ID" "order_id" || { echo "ERROR: API returned order_id with invalid characters"; exit 1; }
 
 # Extract fields
 PAY_ADDRESS=$(echo "$API_RESPONSE" | jq -r '.pay_address // "unknown"')

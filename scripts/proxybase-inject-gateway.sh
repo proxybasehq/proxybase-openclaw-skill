@@ -10,13 +10,25 @@ set -euo pipefail
 # Source shared library
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
 
-ORDER_ID="${1:-}"
+ORDER_ID=""
+DRY_RUN=false
+
+for arg in "$@"; do
+    case "$arg" in
+        --dry-run) DRY_RUN=true ;;
+        -*) ;;
+        *) ORDER_ID="$arg" ;;
+    esac
+done
 
 if [[ -z "$ORDER_ID" ]]; then
     echo "ERROR: order_id is required"
-    echo "Usage: bash proxybase-inject-gateway.sh <order_id>"
+    echo "Usage: bash proxybase-inject-gateway.sh <order_id> [--dry-run]"
     exit 1
 fi
+
+# Validate order_id to prevent injection
+validate_safe_string "$ORDER_ID" "order_id" || { echo "ERROR: order_id contains invalid characters"; exit 1; }
 
 init_orders_file
 
@@ -30,6 +42,13 @@ if [[ -z "$PROXY_URL" ]]; then
     exit 1
 fi
 
+# Validate the proxy URL before injecting into systemd service
+if ! validate_safe_string "$PROXY_URL" "proxy_url"; then
+    echo "ERROR: Proxy URL contains invalid characters — refusing to inject into systemd service"
+    echo "This may indicate a compromised API response or corrupted state file." >&2
+    exit 1
+fi
+
 SERVICE_FILE="$HOME/.config/systemd/user/openclaw-gateway.service"
 
 if [[ ! -f "$SERVICE_FILE" ]]; then
@@ -39,10 +58,28 @@ if [[ ! -f "$SERVICE_FILE" ]]; then
 fi
 
 # Verify the service file contains a [Service] section
-if ! grep -q '^\[Service\]' "$SERVICE_FILE"; then
+if ! grep -q '\[Service\]' "$SERVICE_FILE"; then
     echo "ERROR: No [Service] section found in $SERVICE_FILE"
     echo "Cannot inject proxy environment variables."
     exit 1
+fi
+
+# Verify this is actually an OpenClaw gateway service file
+if ! grep -qE 'openclaw|OpenClaw' "$SERVICE_FILE"; then
+    echo "ERROR: $SERVICE_FILE does not appear to be an OpenClaw gateway service"
+    echo "Refusing to modify unrecognized service file."
+    exit 1
+fi
+
+# Dry-run: show what would be changed without modifying anything
+if [[ "$DRY_RUN" == true ]]; then
+    echo "ProxyBase: DRY RUN — would inject into $SERVICE_FILE:"
+    echo "  Environment=HTTP_PROXY=$PROXY_URL"
+    echo "  Environment=HTTPS_PROXY=$PROXY_URL"
+    echo "  Environment=NODE_USE_ENV_PROXY=1"
+    echo ""
+    echo "No changes were made. Remove --dry-run to apply."
+    exit 0
 fi
 
 echo "ProxyBase: Injecting proxy into $SERVICE_FILE..."

@@ -78,15 +78,14 @@ if [[ -z "$API_KEY" || "$API_KEY" == "null" ]]; then
     return 1 2>/dev/null || exit 1
 fi
 
-# Store credentials
-cat > "$CREDS_FILE" << EOF
-# ProxyBase credentials — generated $(date -u +"%Y-%m-%dT%H:%M:%SZ")
-# Agent ID: $AGENT_ID
-export PROXYBASE_API_KEY="$API_KEY"
-export PROXYBASE_API_URL="$PROXYBASE_API_URL"
-EOF
+# Validate API key contains only safe characters (prevent injection via credentials.env)
+if ! validate_safe_string "$API_KEY" "api_key"; then
+    echo "ProxyBase: ERROR — API key contains invalid characters (possible API compromise)"
+    return 1 2>/dev/null || exit 1
+fi
 
-chmod 600 "$CREDS_FILE"
+# Store credentials using safe single-quoted format
+write_credentials_file "$CREDS_FILE" "$API_KEY" "$PROXYBASE_API_URL" "$AGENT_ID"
 
 # Export for current shell
 export PROXYBASE_API_KEY="$API_KEY"

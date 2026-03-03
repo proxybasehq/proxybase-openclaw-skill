@@ -70,6 +70,9 @@ if [[ -z "$ORDER_ID" ]]; then
     exit 1
 fi
 
+# Validate order_id to prevent injection
+validate_safe_string "$ORDER_ID" "order_id" || { echo "ERROR: order_id contains invalid characters"; exit 1; }
+
 load_credentials --required || exit 1
 init_orders_file
 
@@ -123,8 +126,12 @@ check_status() {
             BW_USED=$(echo "$API_RESPONSE" | jq -r '.bandwidth_used // .used_bytes // 0')
             BW_TOTAL=$(echo "$API_RESPONSE" | jq -r '.bandwidth_total // .bandwidth_bytes // 0')
 
-            # Update orders.json with proxy info — under lock
-            local PROXY_URL="socks5://${USERNAME}:${PASSWORD}@${HOST}:${PORT}"
+            # Validate proxy credentials from API response (prevents shell injection)
+            if ! build_safe_proxy_url "$HOST" "$PORT" "$USERNAME" "$PASSWORD"; then
+                echo "ERROR: API returned proxy credentials with invalid characters (possible compromise)" >&2
+                return 1
+            fi
+            # PROXY_URL is now set by build_safe_proxy_url
             acquire_lock
             local PROXY_UPDATED
             PROXY_UPDATED=$(jq --arg oid "$ORDER_ID" --arg proxy "$PROXY_URL" \
@@ -136,16 +143,10 @@ check_status() {
 
             # Write per-order proxy env file (safe for multi-proxy)
             local ORDER_PROXY_ENV="${STATE_DIR}/.proxy-env-${ORDER_ID}"
-            cat > "$ORDER_PROXY_ENV" << ENVEOF
-# ProxyBase SOCKS5 proxy — Order $ORDER_ID
-# Generated $(date -u +"%Y-%m-%dT%H:%M:%SZ")
-export ALL_PROXY="$PROXY_URL"
-export HTTPS_PROXY="$PROXY_URL"
-export HTTP_PROXY="$PROXY_URL"
-export NO_PROXY="localhost,127.0.0.1,api.proxybase.xyz"
-export PROXYBASE_SOCKS5="$PROXY_URL"
-ENVEOF
-            chmod 600 "$ORDER_PROXY_ENV"
+            write_proxy_env_file "$ORDER_PROXY_ENV" "$ORDER_ID" "$PROXY_URL" || {
+                echo "ERROR: Failed to write proxy env file" >&2
+                return 1
+            }
             # Also update the shared .proxy-env as a convenience default
             cp -f "$ORDER_PROXY_ENV" "$PROXY_ENV_FILE"
 

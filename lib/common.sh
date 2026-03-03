@@ -24,6 +24,108 @@ if [[ -z "${_PROXYBASE_COMMON_LOADED:-}" ]]; then
     mkdir -p "$STATE_DIR"
 fi
 
+# ─── Input validation & sanitization ─────────────────────────────────
+# Validates values from API responses contain only safe characters,
+# preventing shell injection if the upstream API is compromised.
+validate_safe_string() {
+    local VALUE="$1"
+    local CONTEXT="$2"  # username, password, host, port, order_id, api_key, package_id, proxy_url
+
+    if [[ -z "$VALUE" ]]; then
+        return 1
+    fi
+
+    case "$CONTEXT" in
+        username)
+            # Proxy usernames: alphanumeric, underscore, hyphen, dot
+            [[ "$VALUE" =~ ^[a-zA-Z0-9._-]+$ ]] || { echo "SECURITY: Invalid characters in proxy username — rejecting" >&2; return 1; }
+            ;;
+        password)
+            # Proxy passwords: alphanumeric + safe URL-unreserved chars (no shell metacharacters)
+            [[ "$VALUE" =~ ^[a-zA-Z0-9._!*+-]+$ ]] || { echo "SECURITY: Invalid characters in proxy password — rejecting" >&2; return 1; }
+            ;;
+        host)
+            # Hostnames: alphanumeric, dots, hyphens
+            [[ "$VALUE" =~ ^[a-zA-Z0-9.-]+$ ]] || { echo "SECURITY: Invalid characters in proxy host — rejecting" >&2; return 1; }
+            ;;
+        port)
+            # Numeric only, valid port range
+            [[ "$VALUE" =~ ^[0-9]+$ ]] && [[ "$VALUE" -ge 1 && "$VALUE" -le 65535 ]] || { echo "SECURITY: Invalid proxy port — rejecting" >&2; return 1; }
+            ;;
+        order_id)
+            # Order IDs: alphanumeric, hyphens, underscores
+            [[ "$VALUE" =~ ^[a-zA-Z0-9_-]+$ ]] || { echo "SECURITY: Invalid characters in order_id — rejecting" >&2; return 1; }
+            ;;
+        api_key)
+            # API keys: alphanumeric, underscores, hyphens (pk_xxx format)
+            [[ "$VALUE" =~ ^[a-zA-Z0-9_-]+$ ]] || { echo "SECURITY: Invalid characters in API key — rejecting" >&2; return 1; }
+            ;;
+        package_id)
+            # Package IDs: alphanumeric, underscores, hyphens
+            [[ "$VALUE" =~ ^[a-zA-Z0-9_-]+$ ]] || { echo "SECURITY: Invalid characters in package_id — rejecting" >&2; return 1; }
+            ;;
+        proxy_url)
+            # Full proxy URL: must match socks5://user:pass@host:port pattern
+            [[ "$VALUE" =~ ^socks5://[a-zA-Z0-9._-]+:[a-zA-Z0-9._!*+-]+@[a-zA-Z0-9.-]+:[0-9]+$ ]] || { echo "SECURITY: Invalid proxy URL format — rejecting" >&2; return 1; }
+            ;;
+        *)
+            # Generic: reject common shell metacharacters
+            if [[ "$VALUE" =~ [\$\`\"\'\'\;\&\|\>\<\(\)\{\}\\] ]]; then
+                echo "SECURITY: Unsafe characters detected in $CONTEXT — rejecting" >&2
+                return 1
+            fi
+            ;;
+    esac
+    return 0
+}
+
+# Build a validated proxy URL from individual fields.
+# Sets the PROXY_URL variable on success.
+build_safe_proxy_url() {
+    local _HOST="$1" _PORT="$2" _USER="$3" _PASS="$4"
+
+    validate_safe_string "$_HOST" "host" || return 1
+    validate_safe_string "$_PORT" "port" || return 1
+    validate_safe_string "$_USER" "username" || return 1
+    validate_safe_string "$_PASS" "password" || return 1
+
+    PROXY_URL="socks5://${_USER}:${_PASS}@${_HOST}:${_PORT}"
+    return 0
+}
+
+# Write proxy env file with single-quoted values to prevent shell expansion on source.
+write_proxy_env_file() {
+    local _FILE="$1" _OID="$2" _URL="$3" _LABEL="${4:-}"
+
+    validate_safe_string "$_URL" "proxy_url" || return 1
+
+    {
+        printf '# ProxyBase SOCKS5 proxy — Order %s%s\n' "$_OID" "${_LABEL:+ ($_LABEL)}"
+        printf '# Generated %s\n' "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+        printf "export ALL_PROXY='%s'\n" "$_URL"
+        printf "export HTTPS_PROXY='%s'\n" "$_URL"
+        printf "export HTTP_PROXY='%s'\n" "$_URL"
+        printf "export NO_PROXY='localhost,127.0.0.1,api.proxybase.xyz'\n"
+        printf "export PROXYBASE_SOCKS5='%s'\n" "$_URL"
+    } > "$_FILE"
+    chmod 600 "$_FILE"
+}
+
+# Write credentials file with single-quoted values to prevent shell expansion on source.
+write_credentials_file() {
+    local _FILE="$1" _KEY="$2" _URL="$3" _AGENT_ID="${4:-unknown}"
+
+    validate_safe_string "$_KEY" "api_key" || return 1
+
+    {
+        printf '# ProxyBase credentials — generated %s\n' "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+        printf '# Agent ID: %s\n' "$_AGENT_ID"
+        printf "export PROXYBASE_API_KEY='%s'\n" "$_KEY"
+        printf "export PROXYBASE_API_URL='%s'\n" "$_URL"
+    } > "$_FILE"
+    chmod 600 "$_FILE"
+}
+
 # ─── File locking ────────────────────────────────────────────────────
 # Usage:
 #   acquire_lock          # blocks until lock acquired

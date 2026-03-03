@@ -44,6 +44,89 @@ if [[ -z "${_PROXYBASE_COMMON_LOADED:-}" ]]; then
     mkdir -p "$STATE_DIR"
 fi
 
+# ─── Input validation & sanitization ─────────────────────────────────
+# Validates values from API responses contain only safe characters,
+# preventing shell injection if the upstream API is compromised.
+validate_safe_string() {
+    local VALUE="$1"
+    local CONTEXT="$2"  # username, password, host, port, order_id, api_key, package_id, proxy_url
+
+    if [[ -z "$VALUE" ]]; then
+        return 1
+    fi
+
+    case "$CONTEXT" in
+        username)
+            [[ "$VALUE" =~ ^[a-zA-Z0-9._-]+$ ]] || { echo "SECURITY: Invalid characters in proxy username — rejecting" >&2; return 1; }
+            ;;
+        password)
+            [[ "$VALUE" =~ ^[a-zA-Z0-9._!*+-]+$ ]] || { echo "SECURITY: Invalid characters in proxy password — rejecting" >&2; return 1; }
+            ;;
+        host)
+            [[ "$VALUE" =~ ^[a-zA-Z0-9.-]+$ ]] || { echo "SECURITY: Invalid characters in proxy host — rejecting" >&2; return 1; }
+            ;;
+        port)
+            [[ "$VALUE" =~ ^[0-9]+$ ]] && [[ "$VALUE" -ge 1 && "$VALUE" -le 65535 ]] || { echo "SECURITY: Invalid proxy port — rejecting" >&2; return 1; }
+            ;;
+        order_id)
+            [[ "$VALUE" =~ ^[a-zA-Z0-9_-]+$ ]] || { echo "SECURITY: Invalid characters in order_id — rejecting" >&2; return 1; }
+            ;;
+        api_key)
+            [[ "$VALUE" =~ ^[a-zA-Z0-9_-]+$ ]] || { echo "SECURITY: Invalid characters in API key — rejecting" >&2; return 1; }
+            ;;
+        package_id)
+            [[ "$VALUE" =~ ^[a-zA-Z0-9_-]+$ ]] || { echo "SECURITY: Invalid characters in package_id — rejecting" >&2; return 1; }
+            ;;
+        proxy_url)
+            [[ "$VALUE" =~ ^socks5://[a-zA-Z0-9._-]+:[a-zA-Z0-9._!*+-]+@[a-zA-Z0-9.-]+:[0-9]+$ ]] || { echo "SECURITY: Invalid proxy URL format — rejecting" >&2; return 1; }
+            ;;
+        *)
+            if [[ "$VALUE" =~ [\$\`\"\'\'\;\&\|\>\<\(\)\{\}\\] ]]; then
+                echo "SECURITY: Unsafe characters detected in $CONTEXT — rejecting" >&2
+                return 1
+            fi
+            ;;
+    esac
+    return 0
+}
+
+build_safe_proxy_url() {
+    local _HOST="$1" _PORT="$2" _USER="$3" _PASS="$4"
+    validate_safe_string "$_HOST" "host" || return 1
+    validate_safe_string "$_PORT" "port" || return 1
+    validate_safe_string "$_USER" "username" || return 1
+    validate_safe_string "$_PASS" "password" || return 1
+    PROXY_URL="socks5://${_USER}:${_PASS}@${_HOST}:${_PORT}"
+    return 0
+}
+
+write_proxy_env_file() {
+    local _FILE="$1" _OID="$2" _URL="$3" _LABEL="${4:-}"
+    validate_safe_string "$_URL" "proxy_url" || return 1
+    {
+        printf '# ProxyBase SOCKS5 proxy — Order %s%s\n' "$_OID" "${_LABEL:+ ($_LABEL)}"
+        printf '# Generated %s\n' "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+        printf "export ALL_PROXY='%s'\n" "$_URL"
+        printf "export HTTPS_PROXY='%s'\n" "$_URL"
+        printf "export HTTP_PROXY='%s'\n" "$_URL"
+        printf "export NO_PROXY='localhost,127.0.0.1,api.proxybase.xyz'\n"
+        printf "export PROXYBASE_SOCKS5='%s'\n" "$_URL"
+    } > "$_FILE"
+    chmod 600 "$_FILE"
+}
+
+write_credentials_file() {
+    local _FILE="$1" _KEY="$2" _URL="$3" _AGENT_ID="${4:-unknown}"
+    validate_safe_string "$_KEY" "api_key" || return 1
+    {
+        printf '# ProxyBase credentials — generated %s\n' "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+        printf '# Agent ID: %s\n' "$_AGENT_ID"
+        printf "export PROXYBASE_API_KEY='%s'\n" "$_KEY"
+        printf "export PROXYBASE_API_URL='%s'\n" "$_URL"
+    } > "$_FILE"
+    chmod 600 "$_FILE"
+}
+
 # ─── File locking ────────────────────────────────────────────────────
 _LOCK_FD=""
 _LOCK_METHOD=""
@@ -312,14 +395,13 @@ cmd_register() {
         return 1
     fi
 
-    cat > "$CREDS_FILE" << EOF
-# ProxyBase credentials — generated $(date -u +"%Y-%m-%dT%H:%M:%SZ")
-# Agent ID: $AGENT_ID
-export PROXYBASE_API_KEY="$API_KEY"
-export PROXYBASE_API_URL="$PROXYBASE_API_URL"
-EOF
+    # Validate API key contains only safe characters (prevent injection via credentials.env)
+    if ! validate_safe_string "$API_KEY" "api_key"; then
+        echo "ProxyBase: ERROR — API key contains invalid characters (possible API compromise)"
+        return 1
+    fi
 
-    chmod 600 "$CREDS_FILE"
+    write_credentials_file "$CREDS_FILE" "$API_KEY" "$PROXYBASE_API_URL" "$AGENT_ID"
 
     export PROXYBASE_API_KEY="$API_KEY"
     export PROXYBASE_API_URL
@@ -343,6 +425,9 @@ cmd_order() {
         echo "Available packages: us_residential_1gb, us_residential_5gb, us_residential_10gb"
         exit 1
     fi
+
+    # Validate input to prevent injection
+    validate_safe_string "$PACKAGE_ID" "package_id" || { echo "ERROR: package_id contains invalid characters"; exit 1; }
 
     load_credentials --required || exit 1
     init_orders_file
@@ -379,6 +464,9 @@ cmd_order() {
         echo "$API_RESPONSE" | jq .
         exit 1
     fi
+
+    # Validate order_id from API response
+    validate_safe_string "$ORDER_ID" "order_id" || { echo "ERROR: API returned order_id with invalid characters"; exit 1; }
 
     local PAY_ADDRESS PAY_AMOUNT RESP_CURRENCY PRICE_USD EXPIRATION STATUS
     PAY_ADDRESS=$(echo "$API_RESPONSE" | jq -r '.pay_address // "unknown"')
@@ -491,6 +579,9 @@ cmd_poll() {
         exit 1
     fi
 
+    # Validate order_id to prevent injection
+    validate_safe_string "$ORDER_ID" "order_id" || { echo "ERROR: order_id contains invalid characters"; exit 1; }
+
     load_credentials --required || exit 1
     init_orders_file
 
@@ -540,7 +631,12 @@ cmd_poll() {
                 BW_USED=$(echo "$API_RESPONSE" | jq -r '.bandwidth_used // .used_bytes // 0')
                 BW_TOTAL=$(echo "$API_RESPONSE" | jq -r '.bandwidth_total // .bandwidth_bytes // 0')
 
-                local PROXY_URL="socks5://${USERNAME}:${PASSWORD}@${HOST}:${PORT}"
+                # Validate proxy credentials from API response (prevents shell injection)
+                if ! build_safe_proxy_url "$HOST" "$PORT" "$USERNAME" "$PASSWORD"; then
+                    echo "ERROR: API returned proxy credentials with invalid characters (possible compromise)" >&2
+                    return 1
+                fi
+                # PROXY_URL is now set by build_safe_proxy_url
                 acquire_lock
                 local PROXY_UPDATED
                 PROXY_UPDATED=$(jq --arg oid "$ORDER_ID" --arg proxy "$PROXY_URL" \
@@ -551,16 +647,10 @@ cmd_poll() {
                 release_lock
 
                 local ORDER_PROXY_ENV="${STATE_DIR}/.proxy-env-${ORDER_ID}"
-                cat > "$ORDER_PROXY_ENV" << ENVEOF
-# ProxyBase SOCKS5 proxy — Order $ORDER_ID
-# Generated $(date -u +"%Y-%m-%dT%H:%M:%SZ")
-export ALL_PROXY="$PROXY_URL"
-export HTTPS_PROXY="$PROXY_URL"
-export HTTP_PROXY="$PROXY_URL"
-export NO_PROXY="localhost,127.0.0.1,api.proxybase.xyz"
-export PROXYBASE_SOCKS5="$PROXY_URL"
-ENVEOF
-                chmod 600 "$ORDER_PROXY_ENV"
+                write_proxy_env_file "$ORDER_PROXY_ENV" "$ORDER_ID" "$PROXY_URL" || {
+                    echo "ERROR: Failed to write proxy env file" >&2
+                    return 1
+                }
                 cp -f "$ORDER_PROXY_ENV" "$PROXY_ENV_FILE"
 
                 local BW_USED_MB BW_TOTAL_MB BW_PCT
@@ -725,6 +815,11 @@ cmd_status() {
         esac
     done
 
+    # Validate order_id early (before file operations)
+    if [[ -n "$SPECIFIC_ORDER" ]]; then
+        validate_safe_string "$SPECIFIC_ORDER" "order_id" || { echo "ERROR: order_id contains invalid characters"; exit 1; }
+    fi
+
     if [[ ! -f "$ORDERS_FILE" ]]; then
         echo "No tracked orders. Create one with:"
         echo "  bash $SKILL_DIR/proxybase.sh order us_residential_1gb"
@@ -849,11 +944,15 @@ cmd_status() {
                 USER=$(echo "$API_RESPONSE" | jq -r '.proxy.username // empty')
                 PASS=$(echo "$API_RESPONSE" | jq -r '.proxy.password // empty')
                 if [[ -n "$USER" && -n "$PASS" ]]; then
-                    local PROXY_URL="socks5://${USER}:${PASS}@${HOST}:${PORT}"
-                    UPDATED=$(jq --arg oid "$OID" --arg p "$PROXY_URL" \
-                        '(.orders[] | select(.order_id == $oid)).proxy = $p' "$ORDERS_FILE")
-                    if validate_json "$UPDATED"; then
-                        echo "$UPDATED" > "$ORDERS_FILE"
+                    # Validate proxy credentials before storing
+                    if build_safe_proxy_url "$HOST" "$PORT" "$USER" "$PASS"; then
+                        UPDATED=$(jq --arg oid "$OID" --arg p "$PROXY_URL" \
+                            '(.orders[] | select(.order_id == $oid)).proxy = $p' "$ORDERS_FILE")
+                        if validate_json "$UPDATED"; then
+                            echo "$UPDATED" > "$ORDERS_FILE"
+                        fi
+                    else
+                        echo "  $OID: SECURITY WARNING — proxy credentials contain invalid characters" >&2
                     fi
                 fi
             fi
@@ -893,6 +992,10 @@ cmd_topup() {
         echo "Available packages: us_residential_1gb, us_residential_5gb, us_residential_10gb"
         exit 1
     fi
+
+    # Validate inputs to prevent injection
+    validate_safe_string "$ORDER_ID" "order_id" || { echo "ERROR: order_id contains invalid characters"; exit 1; }
+    validate_safe_string "$PACKAGE_ID" "package_id" || { echo "ERROR: package_id contains invalid characters"; exit 1; }
 
     load_credentials --required || exit 1
     init_orders_file
@@ -979,6 +1082,9 @@ cmd_rotate() {
         exit 1
     fi
 
+    # Validate order_id to prevent injection
+    validate_safe_string "$ORDER_ID" "order_id" || { echo "ERROR: order_id contains invalid characters"; exit 1; }
+
     load_credentials --required || exit 1
     init_orders_file
 
@@ -1010,7 +1116,12 @@ cmd_rotate() {
         exit 1
     fi
 
-    local PROXY_URL="socks5://${USERNAME}:${PASSWORD}@${HOST}:${PORT}"
+    # Validate proxy credentials from API response (prevents shell injection)
+    if ! build_safe_proxy_url "$HOST" "$PORT" "$USERNAME" "$PASSWORD"; then
+        echo "ERROR: API returned proxy credentials with invalid characters (possible compromise)" >&2
+        exit 1
+    fi
+    # PROXY_URL is now set by build_safe_proxy_url
 
     acquire_lock
 
@@ -1031,16 +1142,10 @@ cmd_rotate() {
     release_lock
 
     local ORDER_PROXY_ENV="${STATE_DIR}/.proxy-env-${ORDER_ID}"
-    cat > "$ORDER_PROXY_ENV" << ENVEOF
-# ProxyBase SOCKS5 proxy — Order $ORDER_ID (rotated)
-# Generated $(date -u +"%Y-%m-%dT%H:%M:%SZ")
-export ALL_PROXY="$PROXY_URL"
-export HTTPS_PROXY="$PROXY_URL"
-export HTTP_PROXY="$PROXY_URL"
-export NO_PROXY="localhost,127.0.0.1,api.proxybase.xyz"
-export PROXYBASE_SOCKS5="$PROXY_URL"
-ENVEOF
-    chmod 600 "$ORDER_PROXY_ENV"
+    write_proxy_env_file "$ORDER_PROXY_ENV" "$ORDER_ID" "$PROXY_URL" "rotated" || {
+        echo "ERROR: Failed to write proxy env file" >&2
+        exit 1
+    }
     cp -f "$ORDER_PROXY_ENV" "$PROXY_ENV_FILE"
 
     echo ""
@@ -1063,12 +1168,24 @@ ENVEOF
 # ─── inject-gateway ──────────────────────────────────────────────────
 cmd_inject_gateway() {
     local ORDER_ID="${1:-}"
+    local DRY_RUN=false
+
+    for arg in "$@"; do
+        case "$arg" in
+            --dry-run) DRY_RUN=true ;;
+            -*) ;;
+            *) ORDER_ID="$arg" ;;
+        esac
+    done
 
     if [[ -z "$ORDER_ID" ]]; then
         echo "ERROR: order_id is required"
-        echo "Usage: bash proxybase.sh inject-gateway <order_id>"
+        echo "Usage: bash proxybase.sh inject-gateway <order_id> [--dry-run]"
         exit 1
     fi
+
+    # Validate order_id to prevent injection
+    validate_safe_string "$ORDER_ID" "order_id" || { echo "ERROR: order_id contains invalid characters"; exit 1; }
 
     init_orders_file
 
@@ -1082,6 +1199,13 @@ cmd_inject_gateway() {
         exit 1
     fi
 
+    # Validate the proxy URL before injecting into systemd service
+    if ! validate_safe_string "$PROXY_URL" "proxy_url"; then
+        echo "ERROR: Proxy URL contains invalid characters — refusing to inject into systemd service"
+        echo "This may indicate a compromised API response or corrupted state file." >&2
+        exit 1
+    fi
+
     local SERVICE_FILE="$HOME/.config/systemd/user/openclaw-gateway.service"
 
     if [[ ! -f "$SERVICE_FILE" ]]; then
@@ -1090,10 +1214,28 @@ cmd_inject_gateway() {
         exit 1
     fi
 
-    if ! grep -q '^\[Service\]' "$SERVICE_FILE"; then
+    if ! grep -q '\[Service\]' "$SERVICE_FILE"; then
         echo "ERROR: No [Service] section found in $SERVICE_FILE"
         echo "Cannot inject proxy environment variables."
         exit 1
+    fi
+
+    # Verify this is actually an OpenClaw gateway service file
+    if ! grep -qE 'openclaw|OpenClaw' "$SERVICE_FILE"; then
+        echo "ERROR: $SERVICE_FILE does not appear to be an OpenClaw gateway service"
+        echo "Refusing to modify unrecognized service file."
+        exit 1
+    fi
+
+    # Dry-run: show what would be changed without modifying anything
+    if [[ "$DRY_RUN" == true ]]; then
+        echo "ProxyBase: DRY RUN — would inject into $SERVICE_FILE:"
+        echo "  Environment=HTTP_PROXY=$PROXY_URL"
+        echo "  Environment=HTTPS_PROXY=$PROXY_URL"
+        echo "  Environment=NODE_USE_ENV_PROXY=1"
+        echo ""
+        echo "No changes were made. Remove --dry-run to apply."
+        exit 0
     fi
 
     echo "ProxyBase: Injecting proxy into $SERVICE_FILE..."
@@ -1176,7 +1318,7 @@ cmd_help() {
     echo "  status [order_id] [--cleanup]        Show order status"
     echo "  topup <order_id> <pkg> [currency]    Top up bandwidth"
     echo "  rotate <order_id>                    Rotate proxy credentials"
-    echo "  inject-gateway <order_id>            Inject proxy into OpenClaw gateway"
+    echo "  inject-gateway <order_id> [--dry-run] Inject proxy into OpenClaw gateway"
     echo "  help                                 Show this help"
     echo ""
     echo "Poll options:"
