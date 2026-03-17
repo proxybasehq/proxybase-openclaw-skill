@@ -284,7 +284,7 @@ curl -s --proxy socks5://USERNAME:PASSWORD@api.proxybase.xyz:1080 https://lemont
 | `429 Too Many Requests` | Rate limited | Wait 5-10s and retry, max 3 attempts |
 | `500/502/503` | Server error | Retry up to 3 times with 5s delay |
 | `partially_paid` | Underpayment | Tell user the remaining amount; keep polling |
-| `expired` | Payment window closed (~24h) | Create new order |
+| `expired` | Payment window closed (~10m) | Create new order |
 | `failed` | Payment error | Create new order, log for support |
 | `bandwidth_exhausted` | All bandwidth used | Top up: `POST /orders/{id}/topup` |
 
@@ -295,7 +295,7 @@ curl -s --proxy socks5://USERNAME:PASSWORD@api.proxybase.xyz:1080 https://lemont
 - Bandwidth is tracked in real-time at byte level
 - Top-ups are additive (extend existing bandwidth, same credentials)
 - Webhook notifications at 80% and 95% bandwidth usage if `callback_url` provided
-- Payment expires after ~24h (NOWPayments window)
+- Payment expires after ~10m (NOWPayments window)
 - USDC on SOL is recommended: fast confirmations, low fees
 - **Never expose `api_key` or proxy passwords in chat messages** — use env vars
 

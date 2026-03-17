@@ -189,7 +189,7 @@ proxy_active → bandwidth_exhausted (topup available)
 | `jq: command not found` | Install jq: `brew install jq` (macOS) or `apt install jq` (Linux) |
 | `curl: command not found` | Install curl from your package manager |
 | Order stuck on `payment_pending` | Check the payment address — crypto may not have been sent yet |
-| Order `expired` | Payment window closed (usually 60 min). Create a new order |
+| Order `expired` | Payment window closed (usually 10 min). Create a new order |
 | `partially_paid` | Insufficient amount sent. Top up the remaining balance |
 | Proxy not routing traffic | Check `state/.proxy-env` matches the active order |
 

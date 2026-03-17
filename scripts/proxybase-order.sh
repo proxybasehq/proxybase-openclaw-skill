@@ -78,7 +78,7 @@ PAY_ADDRESS=$(echo "$API_RESPONSE" | jq -r '.pay_address // "unknown"')
 PAY_AMOUNT=$(echo "$API_RESPONSE" | jq -r '.pay_amount // "unknown"')
 RESP_CURRENCY=$(echo "$API_RESPONSE" | jq -r '.pay_currency // "unknown"')
 PRICE_USD=$(echo "$API_RESPONSE" | jq -r '.price_usd // "unknown"')
-EXPIRATION=$(echo "$API_RESPONSE" | jq -r '.expiration_estimate_date // "~24 hours"')
+EXPIRATION=$(echo "$API_RESPONSE" | jq -r '.expiration_estimate_date // "~10 minutes"')
 STATUS=$(echo "$API_RESPONSE" | jq -r '.status // "payment_pending"')
 
 # Track order in orders.json — under lock

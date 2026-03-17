@@ -60,7 +60,7 @@ TOPUP_PAY_ADDRESS=$(echo "$API_RESPONSE" | jq -r '.pay_address // "unknown"')
 TOPUP_PAY_AMOUNT=$(echo "$API_RESPONSE" | jq -r '.pay_amount // "unknown"')
 TOPUP_CURRENCY=$(echo "$API_RESPONSE" | jq -r '.pay_currency // "unknown"')
 TOPUP_STATUS=$(echo "$API_RESPONSE" | jq -r '.status // "payment_pending"')
-TOPUP_EXPIRY=$(echo "$API_RESPONSE" | jq -r '.expiration_estimate_date // "~24 hours"')
+TOPUP_EXPIRY=$(echo "$API_RESPONSE" | jq -r '.expiration_estimate_date // "~10 minutes"')
 
 # Update order in state file — record the top-up
 acquire_lock

@@ -473,7 +473,7 @@ cmd_order() {
     PAY_AMOUNT=$(echo "$API_RESPONSE" | jq -r '.pay_amount // "unknown"')
     RESP_CURRENCY=$(echo "$API_RESPONSE" | jq -r '.pay_currency // "unknown"')
     PRICE_USD=$(echo "$API_RESPONSE" | jq -r '.price_usd // "unknown"')
-    EXPIRATION=$(echo "$API_RESPONSE" | jq -r '.expiration_estimate_date // "~24 hours"')
+    EXPIRATION=$(echo "$API_RESPONSE" | jq -r '.expiration_estimate_date // "~10 minutes"')
     STATUS=$(echo "$API_RESPONSE" | jq -r '.status // "payment_pending"')
 
     local TIMESTAMP
@@ -1028,7 +1028,7 @@ cmd_topup() {
     TOPUP_PAY_AMOUNT=$(echo "$API_RESPONSE" | jq -r '.pay_amount // "unknown"')
     TOPUP_CURRENCY=$(echo "$API_RESPONSE" | jq -r '.pay_currency // "unknown"')
     TOPUP_STATUS=$(echo "$API_RESPONSE" | jq -r '.status // "payment_pending"')
-    TOPUP_EXPIRY=$(echo "$API_RESPONSE" | jq -r '.expiration_estimate_date // "~24 hours"')
+    TOPUP_EXPIRY=$(echo "$API_RESPONSE" | jq -r '.expiration_estimate_date // "~10 minutes"')
 
     acquire_lock
 
